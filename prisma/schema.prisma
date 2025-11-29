@@ -1,0 +1,310 @@
+// BudgetPath - Prisma Schema
+// Manual budget planning and goal-setting tool with gamification
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  PERSONAL
+  COMPANY
+}
+
+enum TransactionType {
+  EARNING
+  FIXED_EXPENSE
+  VARIABLE_EXPENSE
+}
+
+enum Frequency {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum GoalType {
+  PERSONAL_GOAL      // For personal users
+  EFFICIENCY         // For company: "Make company save money overall"
+  GROWTH             // For company: "Earn X more per month"
+}
+
+// ============================================
+// AUTH MODELS (NextAuth.js v5 compatible)
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // Hashed password for credentials auth
+  
+  // BudgetPath specific fields
+  role          UserRole  @default(PERSONAL)
+  companyName   String?   // Only for COMPANY users
+  onboardingComplete Boolean @default(false)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  incomes       Income[]
+  transactions  Transaction[]
+  goals         Goal[]
+  departments   Department[]  // For company users
+  aiAnalyses    AIAnalysis[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// INCOME MODEL
+// ============================================
+
+model Income {
+  id          String    @id @default(cuid())
+  userId      String
+  
+  name        String         // e.g., "Salary", "Freelance", "Side Business"
+  amount      Float          // Raw amount
+  frequency   Frequency      // How often this income is received
+  
+  // Normalized amounts (calculated on creation/update)
+  monthlyAmount Float        // Normalized to monthly
+  dailyAmount   Float        // Normalized to daily
+  
+  // For company mode
+  reliabilityRating Int?     @default(5) // 1-10 scale
+  
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isActive])
+}
+
+// ============================================
+// TRANSACTION MODEL
+// ============================================
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  
+  name        String               // e.g., "Rent", "Netflix", "Groceries"
+  description String?
+  amount      Float
+  type        TransactionType
+  
+  // For FIXED_EXPENSE: the day of month for automatic virtual deduction
+  dayOfMonth  Int?            // 1-31, null for variable expenses
+  
+  // For tracking when variable expenses were added
+  transactionDate DateTime    @default(now())
+  
+  // Normalized amounts (for fixed expenses)
+  monthlyAmount Float?
+  dailyAmount   Float?
+  
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departmentId String?
+  department   Department?    @relation(fields: [departmentId], references: [id])
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([userId, transactionDate])
+}
+
+// ============================================
+// GOAL MODEL (The "Pathfinder" System)
+// ============================================
+
+model Goal {
+  id              String    @id @default(cuid())
+  userId          String
+  
+  name            String         // e.g., "New Laptop", "Emergency Fund", "Vacation"
+  targetAmount    Float          // The goal amount
+  currentAmount   Float          @default(0) // Amount saved so far
+  targetDate      DateTime       // When user wants to achieve this
+  
+  // Emergency Fund Mode - adds 20% buffer
+  isEmergencyFund Boolean        @default(false)
+  
+  // Calculated fields (updated on creation/modification)
+  requiredAmount  Float          // targetAmount * 1.2 if emergency fund
+  daysRemaining   Int            // Target Date - Today
+  dailySaveRate   Float          // Required Amount / Days Remaining
+  weeklySaveRate  Float          // dailySaveRate * 7
+  
+  // For company mode
+  goalType        GoalType       @default(PERSONAL_GOAL)
+  growthTarget    Float?         // For GROWTH type: amount to earn more per month
+  
+  isCompleted     Boolean        @default(false)
+  completedAt     DateTime?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions   GoalContribution[]
+
+  @@index([userId])
+  @@index([userId, isCompleted])
+  @@index([targetDate])
+}
+
+// Track contributions towards goals
+model GoalContribution {
+  id          String    @id @default(cuid())
+  goalId      String
+  amount      Float
+  note        String?
+  createdAt   DateTime  @default(now())
+  
+  goal        Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+}
+
+// ============================================
+// DEPARTMENT MODEL (Company Mode)
+// ============================================
+
+model Department {
+  id               String    @id @default(cuid())
+  userId           String
+  
+  name             String         // e.g., "Ad Department", "HR", "Engineering"
+  totalBudget      Float          // Monthly budget/salary total
+  
+  // The crucial efficiency rating for AI analysis
+  efficiencyRating Int            @default(5) // 1-10 scale
+  description      String?        // Notes about what this department does
+  
+  headcount        Int?           // Number of employees (optional)
+  
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+}
+
+// ============================================
+// AI ANALYSIS MODEL
+// ============================================
+
+model AIAnalysis {
+  id          String    @id @default(cuid())
+  userId      String
+  
+  goalType    GoalType       // What the user asked AI to optimize for
+  inputData   Json           // The expense/department data sent to AI
+  
+  // AI Response
+  suggestions Json           // Array of suggestion objects
+  rawResponse String         @db.Text // Full AI response
+  
+  // Metadata
+  model       String         @default("gpt-4o-mini") // OpenAI model used
+  tokensUsed  Int?
+  
+  createdAt   DateTime       @default(now())
+  
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================
+// BUDGET SUMMARY (Materialized View-like cache)
+// ============================================
+
+model BudgetSummary {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  
+  // Totals (updated via triggers or application logic)
+  totalMonthlyIncome    Float @default(0)
+  totalDailyIncome      Float @default(0)
+  totalFixedExpenses    Float @default(0)
+  totalVariableExpenses Float @default(0)
+  netMonthly            Float @default(0)
+  netDaily              Float @default(0)
+  
+  // Savings potential
+  savingsRate           Float @default(0) // Percentage
+  
+  lastCalculatedAt      DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+}
+
