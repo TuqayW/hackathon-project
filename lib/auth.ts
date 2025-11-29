@@ -1,5 +1,4 @@
 import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -35,7 +34,8 @@ declare module "@auth/core/jwt" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  // Note: Adapter is not needed when using JWT strategy with Credentials provider
+  // If you add OAuth providers later, you can add: adapter: PrismaAdapter(prisma) as any
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -73,6 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error("Invalid credentials");
         }
 
+        // Return user with custom fields - explicitly typed to avoid adapter type conflicts
         return {
           id: user.id,
           email: user.email,
@@ -81,6 +82,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           companyName: user.companyName,
           onboardingComplete: user.onboardingComplete,
+        } as {
+          id: string;
+          email: string;
+          name: string | null;
+          image: string | null;
+          role: UserRole;
+          companyName: string | null;
+          onboardingComplete: boolean;
         };
       },
     }),
@@ -113,17 +122,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-  events: {
-    async createUser({ user }) {
-      // Initialize budget summary for new users
-      if (user.id) {
-        await prisma.budgetSummary.create({
-          data: {
-            userId: user.id,
-          },
-        });
-      }
-    },
-  },
+  // Note: User creation (including budget summary) is handled in /api/auth/register
 });
 
