@@ -262,13 +262,14 @@ Focus on:
       data: {
         userId: session.user.id,
         goalType: goalType,
-        inputData: expenseData,
-        suggestions: suggestions,
+        inputData: expenseData as any,   // ← FIX
+        suggestions: suggestions as any, // optional but recommended
         rawResponse: rawResponse,
         model: "gemini-2.0-flash",
         tokensUsed: response.usageMetadata?.totalTokenCount || 0,
       },
     });
+
 
     return NextResponse.json({
       success: true,
