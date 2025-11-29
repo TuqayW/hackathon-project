@@ -39,7 +39,7 @@ A fun, gamified budget planning and goal-setting web application built with Next
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/FinMate.git
+   git clone https://github.com/TuqayW/hackathon-project
    cd FinMate
    ```
 
@@ -58,9 +58,6 @@ A fun, gamified budget planning and goal-setting web application built with Next
    # NextAuth.js
    AUTH_SECRET="your-super-secret-key-here"
    NEXTAUTH_URL="http://localhost:3000"
-
-   # OpenAI API Key (for AI business analysis)
-   OPENAI_API_KEY="sk-your-openai-api-key-here"
    ```
 
 4. **Set up the database**
