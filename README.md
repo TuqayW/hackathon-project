@@ -218,5 +218,5 @@ MIT License - feel free to use this for your own projects!
 
 ---
 
-Built with 💜 by the BudgetPath team
+Built with 💜 by the FinMate team
 
