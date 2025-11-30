@@ -29,10 +29,10 @@ declare module "next-auth" {
 
 // Extend JWT type inline (NextAuth v5 compatible)
 interface ExtendedJWT {
-  id: string;
-  role: UserRole;
+  id?: string;
+  role?: UserRole;
   companyName?: string | null;
-  onboardingComplete: boolean;
+  onboardingComplete?: boolean;
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -120,10 +120,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const extToken = token as ExtendedJWT;
       
       if (extToken) {
-        session.user.id = extToken.id;
-        session.user.role = extToken.role;
-        session.user.companyName = extToken.companyName;
-        session.user.onboardingComplete = extToken.onboardingComplete;
+        session.user.id = extToken.id ?? "";
+        session.user.role = extToken.role ?? "PERSONAL";
+        session.user.companyName = extToken.companyName ?? null;
+        session.user.onboardingComplete = extToken.onboardingComplete ?? false;
       }
       return session;
     },
