@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 // Define UserRole locally to avoid Prisma client generation issues
 type UserRole = "PERSONAL" | "COMPANY";
 
+// Extend NextAuth types
 declare module "next-auth" {
   interface Session {
     user: {
@@ -26,13 +27,12 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    id: string;
-    role: UserRole;
-    companyName?: string | null;
-    onboardingComplete: boolean;
-  }
+// Extend JWT type inline (NextAuth v5 compatible)
+interface ExtendedJWT {
+  id: string;
+  role: UserRole;
+  companyName?: string | null;
+  onboardingComplete: boolean;
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -98,28 +98,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
+      const extToken = token as ExtendedJWT & typeof token;
+      
       if (user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.companyName = user.companyName;
-        token.onboardingComplete = user.onboardingComplete;
+        extToken.id = user.id;
+        extToken.role = user.role;
+        extToken.companyName = user.companyName;
+        extToken.onboardingComplete = user.onboardingComplete;
       }
 
       // Handle session updates (e.g., after onboarding)
       if (trigger === "update" && session) {
-        token.onboardingComplete = session.onboardingComplete;
-        if (session.role) token.role = session.role;
-        if (session.companyName) token.companyName = session.companyName;
+        extToken.onboardingComplete = session.onboardingComplete;
+        if (session.role) extToken.role = session.role;
+        if (session.companyName) extToken.companyName = session.companyName;
       }
 
-      return token;
+      return extToken;
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.companyName = token.companyName;
-        session.user.onboardingComplete = token.onboardingComplete;
+      const extToken = token as ExtendedJWT;
+      
+      if (extToken) {
+        session.user.id = extToken.id;
+        session.user.role = extToken.role;
+        session.user.companyName = extToken.companyName;
+        session.user.onboardingComplete = extToken.onboardingComplete;
       }
       return session;
     },
