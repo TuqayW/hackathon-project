@@ -1,30 +1,34 @@
-import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default auth((req) => {
-  const { nextUrl, auth: session } = req;
-  const isLoggedIn = !!session;
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Check for auth session cookie (NextAuth v5 uses this cookie name)
+  const sessionToken =
+    request.cookies.get("authjs.session-token")?.value ||
+    request.cookies.get("__Secure-authjs.session-token")?.value;
+
+  const isLoggedIn = !!sessionToken;
 
   const isAuthPage =
-    nextUrl.pathname.startsWith("/login") ||
-    nextUrl.pathname.startsWith("/register");
+    pathname.startsWith("/login") || pathname.startsWith("/register");
 
-  const isDashboardPage = nextUrl.pathname.startsWith("/dashboard");
+  const isDashboardPage = pathname.startsWith("/dashboard");
 
   // Redirect logged-in users away from auth pages
   if (isLoggedIn && isAuthPage) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Redirect non-logged-in users to login
   if (!isLoggedIn && isDashboardPage) {
-    return NextResponse.redirect(new URL("/login", nextUrl));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json).*)"],
 };
-
