@@ -2,7 +2,9 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import type { UserRole } from "@prisma/client";
+
+// Define UserRole locally to avoid Prisma client generation issues
+type UserRole = "PERSONAL" | "COMPANY";
 
 declare module "next-auth" {
   interface Session {
@@ -24,7 +26,7 @@ declare module "next-auth" {
   }
 }
 
-declare module "@auth/core/jwt" {
+declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: UserRole;
